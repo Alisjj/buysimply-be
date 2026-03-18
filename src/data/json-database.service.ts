@@ -1,10 +1,17 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'fs';
 import { join, resolve } from 'path';
 import { LoanRecord, StaffRecord } from '../common/types/data.types';
 
 @Injectable()
 export class JsonDatabaseService {
+  private readonly defaultDataDirectory = this.resolveDefaultDataDirectory();
   private readonly dataDirectory = this.resolveDataDirectory();
 
   getStaffs(): StaffRecord[] {
@@ -20,7 +27,7 @@ export class JsonDatabaseService {
   }
 
   private readJsonFile<T>(fileName: string): T {
-    const filePath = join(this.dataDirectory, fileName);
+    const filePath = this.ensureDataFile(fileName);
 
     try {
       return JSON.parse(readFileSync(filePath, 'utf-8')) as T;
@@ -44,6 +51,22 @@ export class JsonDatabaseService {
   }
 
   private resolveDataDirectory(): string {
+    const configuredDirectory = process.env.DATA_DIR?.trim();
+
+    if (configuredDirectory) {
+      const directory = resolve(configuredDirectory);
+
+      if (!existsSync(directory)) {
+        mkdirSync(directory, { recursive: true });
+      }
+
+      return directory;
+    }
+
+    return this.defaultDataDirectory;
+  }
+
+  private resolveDefaultDataDirectory(): string {
     const candidates = [
       resolve(process.cwd(), 'data'),
       resolve(__dirname, '..', '..', 'data'),
@@ -57,5 +80,26 @@ export class JsonDatabaseService {
     }
 
     return directory;
+  }
+
+  private ensureDataFile(fileName: string): string {
+    const filePath = join(this.dataDirectory, fileName);
+
+    if (existsSync(filePath)) {
+      return filePath;
+    }
+
+    const fallbackFilePath = join(this.defaultDataDirectory, fileName);
+
+    if (!existsSync(fallbackFilePath)) {
+      throw new InternalServerErrorException(`${fileName} could not be found.`);
+    }
+
+    if (this.dataDirectory !== this.defaultDataDirectory) {
+      copyFileSync(fallbackFilePath, filePath);
+      return filePath;
+    }
+
+    return fallbackFilePath;
   }
 }

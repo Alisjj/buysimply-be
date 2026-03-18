@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: loan-management-api
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATA_DIR
+        value: /var/data
+    disk:
+      name: loan-management-data
+      mountPath: /var/data
+      sizeGB: 1
